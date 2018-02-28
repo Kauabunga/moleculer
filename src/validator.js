@@ -9,6 +9,7 @@
 const Promise = require("bluebird");
 const Validator = require("fastest-validator");
 const { ValidationError } = require("./errors");
+const _ = require("lodash");
 
 class ParamValidator {
 	constructor() {
@@ -26,9 +27,17 @@ class ParamValidator {
 		return this.validator.compile(schema);
 	}
 
-	getValidationErrorMessage(errors, actionName) {
+	getValidationErrorMessage(errors, params, actionName) {
+		console.log("getValidationErrorMessage\n\n\n\n\n");
+		console.log(errors, params, actionName);
+		console.log("getValidationErrorMessage\n\n\n\n\n");
 		const errorMessages = (errors || [])
-			.map(error => `${error.message} Recieved type '${typeof error.actual}' for the '${error.field}' field!`)
+			.map(
+				error =>
+					`${error.message} Recieved type '${typeof _.result(params, error.field)}' for the '${
+						error.field
+					}' field!`
+			)
 			.join(" ");
 		const actionMessage = actionName ? `Action name '${actionName}'` : "";
 		const message = `Parameters validation error! ${actionMessage} ${errorMessages}`;
@@ -37,7 +46,7 @@ class ParamValidator {
 
 	validate(params, schema) {
 		const res = this.validator.validate(params, schema);
-		if (res !== true) throw new ValidationError(this.getValidationErrorMessage(res), null, res);
+		if (res !== true) throw new ValidationError(this.getValidationErrorMessage(res, params), null, res);
 
 		return true;
 	}
@@ -52,11 +61,15 @@ class ParamValidator {
 			// Wrap a param validator
 			if (action.params && typeof action.params === "object") {
 				const check = this.compile(action.params);
-				const getValidationErrorMessage = res => this.getValidationErrorMessage(res, action.name);
+				const getValidationErrorMessage = (res, params) =>
+					this.getValidationErrorMessage(res, params, action.name);
 				return function validateContextParams(ctx) {
 					const res = check(ctx.params);
 					if (res === true) return handler(ctx);
-					else return Promise.reject(new ValidationError(getValidationErrorMessage(res), null, res));
+					else
+						return Promise.reject(
+							new ValidationError(getValidationErrorMessage(res, ctx.params), null, res)
+						);
 				};
 			}
 			return handler;
