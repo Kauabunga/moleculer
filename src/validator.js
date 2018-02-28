@@ -11,7 +11,6 @@ const Validator = require("fastest-validator");
 const { ValidationError } = require("./errors");
 
 class ParamValidator {
-
 	constructor() {
 		this.validator = new Validator();
 	}
@@ -27,10 +26,18 @@ class ParamValidator {
 		return this.validator.compile(schema);
 	}
 
+	getValidationErrorMessage(errors, actionName) {
+		const errorMessages = (errors || [])
+			.map(error => `${error.message} Recieved type '${typeof error.actual}' for the '${error.field}' field!`)
+			.join(" ");
+		const actionMessage = actionName ? `Action name '${actionName}'` : "";
+		const message = `Parameters validation error! ${actionMessage} ${errorMessages}`;
+		return message.trim();
+	}
+
 	validate(params, schema) {
 		const res = this.validator.validate(params, schema);
-		if (res !== true)
-			throw new ValidationError("Parameters validation error!", null, res);
+		if (res !== true) throw new ValidationError(this.getValidationErrorMessage(res), null, res);
 
 		return true;
 	}
@@ -38,26 +45,23 @@ class ParamValidator {
 	/**
 	 * Register validator as a middleware
 	 *
-	 * @memberof ParamValidator
+	 * @memberOf ParamValidator
 	 */
 	middleware() {
 		return function validatorMiddleware(handler, action) {
 			// Wrap a param validator
 			if (action.params && typeof action.params === "object") {
 				const check = this.compile(action.params);
+				const getValidationErrorMessage = res => this.getValidationErrorMessage(res, action.name);
 				return function validateContextParams(ctx) {
 					const res = check(ctx.params);
-					if (res === true)
-						return handler(ctx);
-					else
-						return Promise.reject(new ValidationError("Parameters validation error!", null, res));
+					if (res === true) return handler(ctx);
+					else return Promise.reject(new ValidationError(getValidationErrorMessage(res), null, res));
 				};
 			}
 			return handler;
 		}.bind(this);
 	}
-
 }
-
 
 module.exports = ParamValidator;
